@@ -17,13 +17,18 @@
 	let loading = false;
 	$: disable = !input;
 
-	async function passQuery(query) {
+	async function passQuery(query, variables) {
 		try {
-			const response = await fetch(`/api/transaction?query=${query}`, {
+			const response = await fetch(`/api/transaction`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
+					'Accept': 'application/json',
 				},
+				body: JSON.stringify({
+					query,
+					variables: variables || 0,
+				})
 			});
 			const json = await response.json();
 			const { data } = await json;
@@ -35,34 +40,36 @@
 
 	async function addTransaction() {
 		const value = typeOfTranasaction === '+' ? input : input * -1;
-		const query = encodeURIComponent(`
-			mutation {
-				createTransaction(input: {
-					value: ${value}, 
-					date: ${Date.now()}
-				}) {
-					_id
-					date
-					value
-				}
+		const query = `mutation CreateTransaction($input: sendTransaction!){
+			createTransaction(input: $input) {
+				_id
+				date
+				value
 			}
-		`);
-		const data = await passQuery(query);
+		}`;
+		const variables = {
+			input: {
+				value,
+				date: Date.now(),
+			}
+		}
+		const data = await passQuery(query, variables);
 		$transactions = [data.createTransaction, ... $transactions];
 		input = null;
 	};
 
 	async function deleteTransaction(id) {
-		const query = encodeURIComponent(`
-			mutation {
-				deleteTransaction(_id: "${id}") {
-					_id
-					value
-					date
-				}
+		const query = `mutation DeleteTransaction($_id: ID!){
+			deleteTransaction(_id: $_id) {
+				_id
+				value
+				date
 			}
-		`);
-		const data = await passQuery(query);
+		}`;
+		const variables = {
+			_id: id,
+		}
+		const data = await passQuery(query, variables);
 		const { _id } = data.deleteTransaction;
 		if (_id === id) {
 			$transactions = $transactions.filter(t => t._id != id);
@@ -71,14 +78,13 @@
 
 	onMount( async () => {
 		loading = true;
-		const query = encodeURIComponent(`
-			query {
-				transactions {
-					_id
-					value
-					date
-				}
-		}`);
+		const query = `query {
+			transactions {
+				_id
+				value
+				date
+			}
+		}`;
 		const data = await passQuery(query);
 		$transactions = data.transactions;
 		loading = false;
